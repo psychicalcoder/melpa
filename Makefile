@@ -205,7 +205,7 @@ $(addprefix -L ,$(LOAD_PATH)) \
 
 TIMEOUT := $(shell which timeout && echo "-k 60 600")
 
-.PHONY: clean build indices json html sandbox
+.PHONY: clean build indices json html sandbox build-ignore-errors
 .FORCE:
 
 ## Build
@@ -223,6 +223,9 @@ build: $(RCPDIR)/*
 endif
 
 DATE := $(shell date -d "${CHECKOUT_DATE}" "+%s")
+
+.IGNORE:
+build-ignore-errors: $(RCPDIR)/*
 
 $(RCPDIR)/%: .FORCE
 	@echo $(DATE)

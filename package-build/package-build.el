@@ -319,6 +319,10 @@ re-cloning an existing clone after the upstream has changed.")
 (defvar package-build--inhibit-build nil
   "Whether to inhibit building packages (while still update metadata).")
 
+(defvar dvar-track--latest-date "1752969600" ;; 1719792000 = 2024-07-01 00:00:00 UTC
+  ;; 1752969600 = 2025-07-20 00:00:00 UTC
+  "A unix format date. Mask the commits and tags later than this date.")
+
 ;;; Generic Utilities
 
 (defun package-build--message (format-string &rest args)
@@ -397,7 +401,8 @@ or snapshots are build.")
                         "git" "log" "-n1" "--first-parent" "--no-show-signature"
                         "--pretty=format:%H %cd" "--date=unix" rev
                         (and (not exact)
-                             (cons "--" (package-build--spec-globs rcp)))))))
+                             (cons (concat "--until=" dvar-track--latest-date)
+                                   (cons "--" (package-build--spec-globs rcp))))))))
       (pcase-let ((`(,hash ,time) (split-string commit " ")))
         (list hash (string-to-number time)))
     (package-build--error (oref rcp name)
@@ -445,8 +450,19 @@ or snapshots are build.")
 Return (COMMIT-HASH COMMITTER-DATE VERSION-STRING REVDESC TAG) or nil."
   (let ((regexp (package-build--version-regexp rcp))
         (tag nil)
-        (version '(0)))
-    (dolist (n (package-build--list-tags rcp))
+        (version '(0))
+        (tags (package-build--list-tags rcp)))
+
+    (when (and (cl-typep rcp 'package-git-recipe)
+               (not dvar-track--latest-date))
+      (setq tags
+            (seq-filter (lambda (tag-item)
+                          (pcase-let ((`(,date ,tag) tag-item))
+                            (< (string-to-number date)
+                               (string-to-number dvar-track--latest-date))))
+                        tags))
+      (setq (mapcar #'cdr tags)))
+    (dolist (n tags)
       (let ((v (ignore-errors
                  (version-to-list (and (string-match regexp n)
                                        (match-string 1 n))))))
@@ -466,10 +482,20 @@ Return (COMMIT-HASH COMMITTER-DATE VERSION-STRING REVDESC TAG) or nil."
                  tag)))))
 
 (cl-defmethod package-build--list-tags ((_rcp package-git-recipe))
-  (process-lines "git" "tag" "--list"))
+  (mapcar (lambda (line)
+            (let* ((fields (split-string line " " t))
+                   (date (car fields))
+                   (tag (cadr fields)))
+              (cons date tag)))
+          (process-lines "git" "tag" "--list" "--format=%(creatordate:unix) %(refname:strip=2)")))
 
 (cl-defmethod package-build--list-tags ((_rcp package-hg-recipe))
-  (delete "tip" (process-lines "hg" "tags" "--quiet")))
+  (process-lines "hg" "log" "-r" (concat "tag() and date('<"
+                                         dvar-track--latest-date
+                                         " 0')")
+                 "--template"
+                 "{tags}\n"
+                 ))
 
 (define-obsolete-function-alias 'package-build-get-tag-version
   'package-build-tag-version "Package-Build 5.0.0")
@@ -638,11 +664,20 @@ VERSION-STRING has the format \"%Y%m%d.%H%M\"."
       (list rev-hash rev-time))))
 
 (cl-defmethod package-build--timestamp-version ((rcp package-hg-recipe))
+<<<<<<< HEAD
   (pcase-let* (((eieio commit branch) rcp)
                (rev (format "sort(ancestors(%s), -rev)"
                             (or commit
                                 (format "max(branch(%s))"
                                         (or branch "default"))))))
+=======
+  (let* ((commit (oref rcp commit))
+         (branch (or (oref rcp branch) "default"))
+         (rev (if commit
+                  (format "sort(ancestors(%s), -rev)" commit)
+                (format "sort(ancestors(max(branch(%s))), -rev) and date('<%s 0')"
+                        branch dvar-track--latest-date))))
+>>>>>>> 5a61af4d (checkout a specific date)
     (package-build--select-commit rcp rev nil)))
 
 (define-obsolete-function-alias 'package-build-get-snapshot-version
