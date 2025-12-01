@@ -222,7 +222,10 @@ else
 build: $(RCPDIR)/*
 endif
 
+DATE := $(shell date -d "${CHECKOUT_DATE}" "+%s")
+
 $(RCPDIR)/%: .FORCE
+	@echo $(DATE)
 	@mkdir -p $(PKGDIR)
 	@exec 2>&1; exec &> >(tee $(PKGDIR)/$(@F).log); \
 	  $(TIMEOUT) $(EVAL) "(package-build-archive \"$(@F)\")"
