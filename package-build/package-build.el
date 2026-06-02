@@ -533,12 +533,17 @@ Return (COMMIT-HASH COMMITTER-DATE VERSION-STRING REVDESC TAG) or nil."
                  tag)))))
 
 (cl-defmethod package-build--list-tags ((_rcp package-git-recipe))
-  (mapcar (lambda (line)
-            (let* ((fields (split-string line " " t))
-                   (date (car fields))
-                   (tag (cadr fields)))
-              (cons date tag)))
-          (process-lines "git" "tag" "--list" "--format=%(creatordate:unix) %(refname:strip=2)")))
+  (let ((ldate (string-to-number dvar-track--latest-date))
+        (lines (process-lines "git" "tag" "--list" "--format=%(creatordate:unix) %(refname:strip=2)")))
+    (seq-remove #'null 
+                (mapcar (lambda (line)
+                          (let* ((fields (split-string line " " t))
+                                 (date (car fields))
+                                 (tag (cadr fields))
+                                 (ndate (string-to-number date)))
+                            (and (< ndate ldate) tag)))
+                        lines
+                        ))))
 
 (cl-defmethod package-build--list-tags ((_rcp package-hg-recipe))
   (process-lines "hg" "log" "-r" (concat "tag() and date('<"
