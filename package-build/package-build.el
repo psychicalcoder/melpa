@@ -319,7 +319,12 @@ re-cloning an existing clone after the upstream has changed.")
 (defvar package-build--inhibit-build nil
   "Whether to inhibit building packages (while still update metadata).")
 
-(defvar dvar-track--latest-date "1752969600" ;; 1719792000 = 2024-07-01 00:00:00 UTC
+(defvar dvar-track--latest-date
+  (or (getenv "CHECKOUT_DATE")
+      (format "%d" (time-convert (current-time) 'integer))
+      )
+  ;; "1752969600"
+  ;; 1719792000 = 2024-07-01 00:00:00 UTC
   ;; 1752969600 = 2025-07-20 00:00:00 UTC
   "A unix format date. Mask the commits and tags later than this date.")
 
@@ -664,20 +669,11 @@ VERSION-STRING has the format \"%Y%m%d.%H%M\"."
       (list rev-hash rev-time))))
 
 (cl-defmethod package-build--timestamp-version ((rcp package-hg-recipe))
-<<<<<<< HEAD
   (pcase-let* (((eieio commit branch) rcp)
-               (rev (format "sort(ancestors(%s), -rev)"
-                            (or commit
-                                (format "max(branch(%s))"
-                                        (or branch "default"))))))
-=======
-  (let* ((commit (oref rcp commit))
-         (branch (or (oref rcp branch) "default"))
-         (rev (if commit
-                  (format "sort(ancestors(%s), -rev)" commit)
-                (format "sort(ancestors(max(branch(%s))), -rev) and date('<%s 0')"
-                        branch dvar-track--latest-date))))
->>>>>>> 5a61af4d (checkout a specific date)
+               (rev (if commit
+                        (format "sort(ancestors(%s), -rev)" commit)
+                      (format "sort(ancestors(max(branch(%s))), -rev) and date('<%s 0')"
+                              branch dvar-track--latest-date))))
     (package-build--select-commit rcp rev nil)))
 
 (define-obsolete-function-alias 'package-build-get-snapshot-version

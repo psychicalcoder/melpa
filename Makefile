@@ -222,15 +222,13 @@ else
 build: $(RCPDIR)/*
 endif
 
-DATE := $(shell date -d "${CHECKOUT_DATE}" "+%s")
-
 .IGNORE:
 build-ignore-errors: $(RCPDIR)/*
 
 $(RCPDIR)/%: .FORCE
-	@echo $(DATE)
 	@mkdir -p $(PKGDIR)
 	@exec 2>&1; exec &> >(tee $(PKGDIR)/$(@F).log); \
+	  $(if $(DATE), CHECKOUT_DATE="$(shell date -d '$(DATE)' +%s)") \
 	  $(TIMEOUT) $(EVAL) "(package-build-archive \"$(@F)\")"
 	@test $(SLEEP) -gt 0 && echo " Sleeping $(SLEEP) seconds ..." \
 	  && sleep $(SLEEP) || true
