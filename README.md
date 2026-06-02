@@ -55,6 +55,12 @@ package-list-packages` to ensure that Emacs has fetched the MELPA
 package list before you can install packages with `M-x
 package-install` or similar.
 
+To build a package snapshot of a specific date, we can pass the `DATE` environment variable to the build command. The `DATE` variable will be transform to Unix Time with `date -d $(DATE) +%s` and passed to the build script.
+```shell
+DATE="2025-11-30" make recipes/lsp-mode
+make archive-contents
+```
+
 ### MELPA Stable
 
 Packages in MELPA are built directly from the latest package source
@@ -352,6 +358,8 @@ accepted by the `Makefile`.
   are put in the `packages/` folder with version corresponding to the
   date of the latest commit that modified at least one of the files
   specified by the recipe; given according to the `%Y%m%d` format.
+  When the environment variable `DATE` is set, the lastest commit
+  until the specified date will be used to build the package.
 
 * `json` — build all JSON files.
 
