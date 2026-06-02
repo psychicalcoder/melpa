@@ -169,6 +169,107 @@ else
   MAKEFLAGS += --no-print-directory
 endif
 
+RCPDIR  := recipes
+WORKDIR := working
+SANDBOX := sandbox
+
+ifdef DOCKER_MELPA_CHANNEL
+MELPA_CHANNEL = $(DOCKER_MELPA_CHANNEL)
+endif
+
+ifndef MELPA_CHANNEL
+PKGDIR  := packages
+HTMLDIR := html
+CHANNEL_CONFIG := "()"
+
+else ifeq ($(MELPA_CHANNEL), unstable)
+PKGDIR  := packages
+HTMLDIR := html
+CHANNEL_CONFIG := "(progn\
+  (setq package-build-stable nil)\
+  (setq package-build-all-publishable t)\
+  (setq package-build-build-function\
+        'package-build--build-multi-file-package)\
+  (setq package-build-snapshot-version-functions\
+        '(package-build-timestamp-version))\
+  (setq package-build-badge-data '(\"melpa\" \"\#922793\")))"
+
+else ifeq ($(MELPA_CHANNEL), stable)
+PKGDIR  := packages-stable
+HTMLDIR := html-stable
+CHANNEL_CONFIG := "(progn\
+  (setq package-build-stable t)\
+  (setq package-build-all-publishable nil)\
+  (setq package-build-build-function\
+        'package-build--build-multi-file-package)\
+  (setq package-build-release-version-functions\
+        '(package-build-tag-version))\
+  (setq package-build-badge-data '(\"melpa stable\" \"\#3e999f\")))"
+
+else ifeq ($(MELPA_CHANNEL), snapshot)
+# This is an experimental channel, which may
+# eventually replace the "unstable" channel.
+PKGDIR  := packages-snapshot
+HTMLDIR := html-snapshot
+CHANNEL_CONFIG := "(progn\
+  (setq package-build-stable nil)\
+  (setq package-build-all-publishable t)\
+  (setq package-build-snapshot-version-functions\
+        '(package-build-release+count-version))\
+  (setq package-build-release-version-functions\
+        '(package-build-tag-version\
+          package-build-header-version))\
+  (setq package-build-badge-data '(\"snapshot\" \"\#30a14e\")))"
+
+else ifeq ($(MELPA_CHANNEL), release)
+# This is an experimental channel, which may
+# eventually replace the "stable" channel.
+PKGDIR  := packages-release
+HTMLDIR := html-release
+CHANNEL_CONFIG := "(progn\
+  (setq package-build-stable t)\
+  (setq package-build-all-publishable t)\
+  (setq package-build-snapshot-version-functions\
+        '(package-build-release+count-version))\
+  (setq package-build-release-version-functions\
+        '(package-build-tag-version\
+          package-build-header-version\
+          package-build-fallback-count-version))\
+  (setq package-build-badge-data '(\"release\" \"\#9be9a8\")))"
+
+else
+$(error Unknown MELPA_CHANNEL: $(MELPA_CHANNEL))
+endif
+
+# You probably don't want to change this.
+LOCATION_CONFIG ?= "(progn\
+  (setq package-build--melpa-base \"$(TOP)/\")\
+  (setq package-build-working-dir \"$(TOP)/$(WORKDIR)/\")\
+  (setq package-build-archive-dir \"$(TOP)/$(PKGDIR)/\")\
+  (setq package-build-recipes-dir \"$(TOP)/$(RCPDIR)/\"))"
+
+ifeq ($(INSIDE_DOCKER), true)
+# When building on the server, this is the vendored copy.
+# When building locally, PACKAGE_BUILD_REPO is mounted here.
+LOAD_PATH := $(TOP)/package-build
+else ifdef PACKAGE_BUILD_REPO
+LOAD_PATH := $(PACKAGE_BUILD_REPO)
+else
+LOAD_PATH := $(TOP)/package-build
+endif
+
+EVAL := $(EMACS) --no-site-file --batch \
+$(addprefix -L ,$(LOAD_PATH)) \
+--eval $(CHANNEL_CONFIG) \
+--eval $(LOCATION_CONFIG) \
+--eval "$(BUILD_CONFIG)" \
+--eval $(USER_CONFIG) \
+--load package-build.el \
+--eval
+
+TIMEOUT := $(shell which timeout && echo "-k 60 600")
+
+.PHONY: clean build indices json html sandbox build-ignore-errors
 .FORCE:
 .PHONY: help fetch build-channels build-channel build \
   archive-contents sign json html clean
@@ -202,9 +303,13 @@ else
 build: $(RCPDIR)/*
 endif
 
+.IGNORE:
+build-ignore-errors: $(RCPDIR)/*
+
 $(RCPDIR)/%: .FORCE
 	$(Q)mkdir -p $(PKGDIR)
 	$(Q)exec 2>&1; exec &> >(tee $(PKGDIR)/$(@F).log); \
+	  $(if $(DATE), CHECKOUT_DATE="$(shell date -d '$(DATE)' +%s)") \
 	  $(TIMEOUT) $(EMACS_EVAL) "(package-build-archive \"$(@F)\")"
 	$(Q)test $(PAUSE) -gt 0 && sleep $(PAUSE) || true
 
